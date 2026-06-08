@@ -32,18 +32,10 @@ const Chip8 = struct {
     sp: u16 = 0,
     key: [16]u8 = 0,
 
-    pub fn load_game(self: *Self, [:0]const u8) void {
-        // // Load ROM (Technically not a ROM) into memory
-        //     FILE *rom = fopen(name, "rb"); // open in read binary mode
-        //     if (rom == NULL)
-        //     {
-        //         printf("Failed to open ROM!\n");
-        //         return;
-        //     }
-
-        //     // Read ROM into memory starting at 0x200
-        //     fread(&pChip8->memory[0x200], 1, 4096, rom);
-        //     fclose(rom);
+    pub fn load_game(self: *Self, name: []const u8) !void {
+        const file = try std.fs.cwd().openFile(name, .{});
+        defer file.close;
+        _ = try file.read(self.memory[0x200..]);
     }
     pub fn emulate_cycle(self: *Self) void {
         // chip8 opcodes are 2 bytes so need to offset then bit mask
@@ -145,8 +137,8 @@ const Chip8 = struct {
             // Display
             0xD000 => {
                 // Grab the coordinates in registers X and Y
-                const xPos: usize = self.V[x] % 64;
-                const yPos: usize = self.V[y] % 32;
+                const xPos: usize = self.V[x];
+                const yPos: usize = self.V[y];
                 // Set VF to 0
                 self.V[0xF] = 0;
                 // For N rows
@@ -155,8 +147,12 @@ const Chip8 = struct {
                     const sprite_row = self.memory[self.I + row];
                     // 0x80 is 10000000 which is the first in the sprite row
                     for (0..8) |bit| {
-                        if (sprite_row & (0x80 >> bit) != 0) {
-                            const index = (yPos + row) * 64 + (xPos + bit);
+                        // Don't know if the intcast thing is necessary TODO test
+                        if (sprite_row & (0x80 >> @intCast(bit)) != 0) {
+                            const px = (xPos + bit) % 64;
+                            const py = (yPos + row) % 32;
+
+                            const index = px * 64 + py;
                             if (self.gfx[index] == 1) {
                                 self.V[0xF] = 1;
                             }
@@ -175,4 +171,5 @@ const Chip8 = struct {
             },
         }
     }
+    pub fn draw_graphics(self: *Self, Renderer: SDL_Renderer) void {}
 };
