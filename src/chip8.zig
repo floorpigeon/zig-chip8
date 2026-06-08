@@ -76,7 +76,7 @@ const Chip8 = struct {
                 self.pc = self.opcode & 0x0FFF;
             },
             // 3XNN
-            // Skip next instruction if the value in VX = NN
+            // Skip next instruction if the value in VX == NN
             0x3000 => {
                 if (self.V[(0x0F00 & self.opcode) >> 8] == (0x00FF & self.opcode)) {
                     self.pc += 4;
@@ -94,7 +94,7 @@ const Chip8 = struct {
                 }
             },
             // 5XY0
-            // Skip if registers are equal
+            // Skip next instruction if registers are equal
             0x5000 => {
                 if (self.V[(0x0F00 & self.opcode) >> 8] == self.V[(0x0F00 & self.opcode) >> 4]) {
                     self.pc += 4;
@@ -113,6 +113,65 @@ const Chip8 = struct {
             0x7000 => {
                 self.V[x] += self.opcode & 0x00FF;
                 self.pc += 2;
+            },
+            0x8000 => {
+                // switch statement
+            },
+            // 9XY0
+            // Skip next instruction if registers are not equal
+            0x9000 => {
+                if (self.V[(0x0F00 & self.opcode) >> 8] != self.V[(0x0F00 & self.opcode) >> 4]) {
+                    self.pc += 4;
+                } else {
+                    self.pc += 2;
+                }
+            },
+            // ANNN
+            // Add NNN at ANNN to I register
+            0xA000 => {
+                self.I = self.opcode & 0x0FFF;
+                self.pc += 2;
+            },
+            // Unimplemented
+            0xB000 => {
+                // Something idk
+            },
+            // CXNN
+            // Random
+            0xC000 => {
+                // self.V[x] = (self.opcode & 0x00FF) & (random something zig)
+            },
+            // DXYN
+            // Display
+            0xD000 => {
+                // Grab the coordinates in registers X and Y
+                const xPos: usize = self.V[x] % 64;
+                const yPos: usize = self.V[y] % 32;
+                // Set VF to 0
+                self.V[0xF] = 0;
+                // For N rows
+                for (0..(self.opcode & 0x000F)) |row| {
+                    // Get the Nth (row) byte of sprite data
+                    const sprite_row = self.memory[self.I + row];
+                    // 0x80 is 10000000 which is the first in the sprite row
+                    for (0..8) |bit| {
+                        if (sprite_row & (0x80 >> bit) != 0) {
+                            const index = (yPos + row) * 64 + (xPos + bit);
+                            if (self.gfx[index] == 1) {
+                                self.V[0xF] = 1;
+                            }
+                            // XOR the pixel
+                            self.gfx[index] ^= 1;
+                        }
+                    }
+                }
+                self.pc += 2;
+            },
+            0xE000 => {
+                // Switch here
+            },
+            0xF000 => {
+                // Switch here
             },
         }
     }
