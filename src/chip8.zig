@@ -79,10 +79,41 @@ const Chip8 = struct {
             // Skip next instruction if the value in VX = NN
             0x3000 => {
                 if (self.V[(0x0F00 & self.opcode) >> 8] == (0x00FF & self.opcode)) {
-                    self.pc += 4; } else {self.pc += 2;}
+                    self.pc += 4;
+                } else {
+                    self.pc += 2;
                 }
             },
-            0x4000 =>
+            // 4XNN
+            // Skip next instruction if the value in VX != NN
+            0x4000 => {
+                if (self.V[(0x0F00 & self.opcode) >> 8] != (0x00FF & self.opcode)) {
+                    self.pc += 4;
+                } else {
+                    self.pc += 2;
+                }
+            },
+            // 5XY0
+            // Skip if registers are equal
+            0x5000 => {
+                if (self.V[(0x0F00 & self.opcode) >> 8] == self.V[(0x0F00 & self.opcode) >> 4]) {
+                    self.pc += 4;
+                } else {
+                    self.pc += 2;
+                }
+            },
+            // 6XNN
+            // Set register X to number NN
+            0x6000 => {
+                self.V[x] = self.opcode & 0x00FF;
+                self.pc += 2;
+            },
+            // 7XNN
+            // Add number NN to register X
+            0x7000 => {
+                self.V[x] += self.opcode & 0x00FF;
+                self.pc += 2;
+            },
         }
     }
 };
