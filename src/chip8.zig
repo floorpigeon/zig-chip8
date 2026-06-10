@@ -38,19 +38,19 @@ pub fn init() Self {
     std.debug.print("You initialised chip8\n", .{});
     return .{};
 }
-pub fn load_game(self: *Self, name: []const u8) !void {
-    const file = try std.fs.cwd().openFile(name, .{});
-    defer file.close;
-    _ = try file.readAll(self.memory[0x200..]);
+pub fn load_game(self: *Self, io: std.Io, file_name: []const u8) !void {
+    const target_buffer = self.memory[0x200..];
+
+    _ = try std.Io.Dir.readFile(std.Io.Dir.cwd(), io, file_name, target_buffer);
 }
 pub fn emulate_cycle(self: *Self) void {
     // chip8 opcodes are 2 bytes so need to offset then bit mask
-    self.opcode = self.memory[self.pc] << 8 | self.memory[self.pc + 1];
+    self.opcode = @as(u16, self.memory[self.pc]) << 8 | self.memory[self.pc + 1];
     std.debug.print("0x{x}\n", .{self.opcode});
 
     // Isolate the opcode fields so we can use them individually
-    const x: u4 = (self.opcode & 0x0F00) >> 8;
-    const y: u4 = (self.opcode & 0x00F0) >> 4;
+    const x: u4 = @truncate((self.opcode & 0x0F00) >> 8);
+    const y: u4 = @truncate((self.opcode & 0x00F0) >> 4);
     switch (self.opcode & 0xF000) {
         0x0000 => switch (self.opcode & 0x00FF) {
             // Clear screen
@@ -63,6 +63,7 @@ pub fn emulate_cycle(self: *Self) void {
                 self.pc = self.stack[self.sp];
                 self.pc += 2;
             },
+            else => {},
         },
         // 1NNN
         // Jump to address NNN
@@ -103,13 +104,13 @@ pub fn emulate_cycle(self: *Self) void {
         // 6XNN
         // Set register X to number NN
         0x6000 => {
-            self.V[x] = self.opcode & 0x00FF;
+            self.V[x] = @truncate(self.opcode & 0x00FF);
             self.pc += 2;
         },
         // 7XNN
         // Add number NN to register X
         0x7000 => {
-            self.V[x] += self.opcode & 0x00FF;
+            self.V[x] += @truncate(self.opcode & 0x00FF);
             self.pc += 2;
         },
         0x8000 => {
@@ -154,11 +155,11 @@ pub fn emulate_cycle(self: *Self) void {
                 // 0x80 is 10000000 which is the first in the sprite row
                 for (0..8) |bit| {
                     // Don't know if the intcast thing is necessary TODO test
-                    if (sprite_row & (0x80 >> @intCast(bit)) != 0) {
+                    if (sprite_row & (@as(u8, 0x80) >> @intCast(bit)) != 0) {
                         const px = (xPos + bit) % 64;
                         const py = (yPos + row) % 32;
 
-                        const index = px * 64 + py;
+                        const index = py * 64 + px;
                         if (self.gfx[index] == 1) {
                             self.V[0xF] = 1;
                         }
@@ -175,26 +176,32 @@ pub fn emulate_cycle(self: *Self) void {
         0xF000 => {
             // Switch here
         },
+        else => {},
     }
 }
-pub fn draw_graphics(self: *Self, renderer: c.SDL_Renderer) void {
+pub fn draw_graphics(self: *Self, renderer: *c.SDL_Renderer) void {
     // Draw the graphics bruh
     // Clear screen to black
-    c.SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
-    c.SDL_RenderClear(renderer);
+    _ = c.SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
+    _ = c.SDL_RenderClear(renderer);
 
     // Draw white pixels
-    c.SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);
+    _ = c.SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);
 
     for (0..32) |y| {
         for (0..64) |x| {
             if (self.gfx[y * 64 + x] != 0) {
-                const rect: c.SDL_FRect = .{ x * 10, y * 10, 10, 10 };
-                c.SDL_RenderFillRect(renderer, &rect);
+                const rect: c.SDL_FRect = .{
+                    .x = @as(f32, @floatFromInt(x)) * 10,
+                    .y = @as(f32, @floatFromInt(y)) * 10,
+                    .w = 10,
+                    .h = 10,
+                };
+                _ = c.SDL_RenderFillRect(renderer, &rect);
             }
         }
     }
 
     // Present the frame
-    c.SDL_RenderPresent(renderer);
+    _ = c.SDL_RenderPresent(renderer);
 }
